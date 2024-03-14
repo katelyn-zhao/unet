@@ -1,5 +1,18 @@
 from keras.models import Model
 from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Conv2DTranspose, BatchNormalization, Dropout, Lambda
+import tensorflow as tf
+
+
+def dice_coef(y_true, y_pred, smooth=1.):
+  """
+  Dice = (2*|X & Y|)/ (|X|+ |Y|)
+        =  2*sum(|A*B|)/(sum(A^2)+sum(B^2))
+  ref: https://arxiv.org/pdf/1606.04797v1.pdf
+  """
+  y_true_f = tf.keras.backend.flatten(y_true)
+  y_pred_f = tf.keras.backend.flatten(y_pred)
+  intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
+  return (2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth)
 
 ################################################################
 def simple_unet_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
@@ -61,8 +74,7 @@ def simple_unet_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
     outputs = Conv2D(1, (1, 1), activation='sigmoid')(c9)
      
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='bce', metrics=[dice_coef])
     model.summary()
     
     return model
- 
