@@ -29,14 +29,14 @@ mask_dataset = []
 sliced_image_dataset = []
 sliced_mask_dataset = []
 
-SIZE = 128
+# SIZE = 128
 
 images = os.listdir(image_directory)
 for i, image_name in enumerate(images):    
     if (image_name.split('.')[1] == 'nii'):
         image = nib.load(image_directory+image_name)
         image = np.array(image.get_fdata())
-        image = resize(image, (SIZE, SIZE))
+        #image = resize(image, (SIZE, SIZE))
         image_dataset.append(np.array(image))
 
 masks = os.listdir(mask_directory)
@@ -44,7 +44,7 @@ for i, image_name in enumerate(masks):
     if (image_name.split('.')[1] == 'nii'):
         image = nib.load(mask_directory+image_name)
         image = np.array(image.get_fdata())
-        image = resize(image, (SIZE, SIZE))
+        #image = resize(image, (SIZE, SIZE))
         mask_dataset.append(np.array(image))
 
 for i in range(len(image_dataset)):
@@ -66,13 +66,13 @@ sliced_mask_dataset = np.expand_dims((np.array(sliced_mask_dataset)),3)
 X_train, X_test, y_train, y_test = train_test_split(sliced_image_dataset, sliced_mask_dataset, test_size = 0.20, random_state = 0)
 
 #Sanity check, view a few images
-image_number = random.randint(0, len(X_train))
-plt.figure(figsize=(12, 6))
-plt.subplot(121)
-plt.imshow(X_train[image_number], cmap='gray')
-plt.subplot(122)
-plt.imshow(y_train[image_number], cmap='gray')
-plt.show()
+# image_number = random.randint(0, len(X_train))
+# plt.figure(figsize=(12, 6))
+# plt.subplot(121)
+# plt.imshow(X_train[image_number], cmap='gray')
+# plt.subplot(122)
+# plt.imshow(y_train[image_number], cmap='gray')
+# plt.show()
 
 ##############################################################################
 
