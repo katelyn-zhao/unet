@@ -201,7 +201,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     y_train, y_test = sliced_mask_dataset[train_index], sliced_mask_dataset[test_index]
 
    
-    checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/5foldunet/best_model{i}.keras', monitor='val_loss', save_best_only=True)
+    checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/best_model{i+3}.keras', monitor='val_loss', save_best_only=True)
 
     history = model.fit(X_train, y_train,
                         batch_size=16,
@@ -227,7 +227,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     plt.ylabel('dice_coef')
     plt.xlabel('Epoch')
     plt.tight_layout()
-    plt.savefig(f'C:/Users/Mittal/Desktop/kunet/process{i}.png')
+    plt.savefig(f'C:/Users/Mittal/Desktop/kunet/process{i+3}.png')
     plt.close()
 
     max_dice_coef = max(history.history['dice_coef'])
@@ -236,7 +236,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     print(max_dice_coef, file=f)
     f.close()
     
-    model.load_weights(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras')
+    model.load_weights(f'C:/Users/Mittal/Desktop/kunet/best_model{i+3}.keras')
 
     for z in range(5):
         test_img_number = random.randint(0, len(X_test))
@@ -251,8 +251,8 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         alpha = 0.5 
         colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
 
-        dice_score = dice_coef(ground_truth, prediction)
-        dice_scores.append(dice_score)
+        #dice_score = dice_coef(ground_truth, prediction)
+        #dice_scores.append(dice_score)
 
         tpr = tprf(ground_truth, prediction, 0.5)
         TPRs.append(tpr)
@@ -274,18 +274,18 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         plt.title("Overlayed Images")
         plt.imshow(original_image_normalized, cmap='gray')
         plt.imshow(colored_mask, cmap='jet')
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/fold{i}_{z}.png')
+        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/fold{i+3}_{z}.png')
         plt.close()
         
-average_dice_coef = np.mean(dice_scores)
+#average_dice_coef = np.mean(dice_scores)
 
 average_tpr = np.mean(TPRs)
 
 average_fpr = np.mean(FPRs)
 
 f = open("C:/Users/Mittal/Desktop/kunet/output.txt", "a")
-print('average prediction dice score', file=f)
-print(average_dice_coef, file=f)
+#print('average prediction dice score', file=f)
+#print(average_dice_coef, file=f)
 print('average prediction tpr', file=f)
 print(average_tpr, file=f)
 print('average prediction fpr', file=f)
