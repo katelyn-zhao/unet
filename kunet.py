@@ -314,7 +314,7 @@ for i in range(n_splits):
             colored_masks.append(colored_mask)
             
         
-        plt.figure(figsize=(16, 16))
+        plt.figure(figsize=(16, 20))
         plt.subplot(5,4,1)
         plt.title('Testing Image')
         plt.imshow(anatomical[0][:,:,0], cmap='gray')
@@ -383,7 +383,7 @@ for i in range(n_splits):
         plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/patient{j}_01234.png')
         plt.close()
 
-        plt.figure(figsize=(16, 16))
+        plt.figure(figsize=(16, 20))
         plt.subplot(5,4,1)
         plt.title('Testing Image')
         plt.imshow(anatomical[5][:,:,0], cmap='gray')
