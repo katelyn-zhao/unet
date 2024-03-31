@@ -26,33 +26,33 @@ def dice_coef(y_true, y_pred, smooth=1.):
   intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
   return (2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth)
 
-def tprf(y_true, y_prob, threshold):
-    y_pred = (y_prob >= threshold)
+# def tprf(y_true, y_prob, threshold):
+#     y_pred = (y_prob >= threshold)
    
-    tp = np.sum((y_pred == 1) & (y_true == 1))
+#     tp = np.sum((y_pred == 1) & (y_true == 1))
 
-    fn = np.sum((y_pred == 0) & (y_true == 1))
+#     fn = np.sum((y_pred == 0) & (y_true == 1))
 
-    if (tp == 0):
-        tpr = 0
-    else:
-        tpr = tp / (tp + fn)
+#     if (tp == 0):
+#         tpr = 0
+#     else:
+#         tpr = tp / (tp + fn)
 
-    return tpr
+#     return tpr
 
-def fprf(y_true, y_prob, threshold):
-    y_pred = (y_prob >= threshold)
+# def fprf(y_true, y_prob, threshold):
+#     y_pred = (y_prob >= threshold)
 
-    fp = np.sum((y_pred == 1) & (y_true == 0))
+#     fp = np.sum((y_pred == 1) & (y_true == 0))
 
-    tn = np.sum((y_pred == 0) & (y_true == 0))
+#     tn = np.sum((y_pred == 0) & (y_true == 0))
     
-    if (fp == 0):
-        fpr = 0
-    else:
-        fpr = fp / (fp + tn)
+#     if (fp == 0):
+#         fpr = 0
+#     else:
+#         fpr = fp / (fp + tn)
 
-    return fpr
+#     return fpr
 
 
 ################################################################################################################################
@@ -176,9 +176,9 @@ sliced_mask_dataset = np.expand_dims((np.array(sliced_mask_dataset)),3)
 
 ##############################################################################################################################################
 
-dice_scores = []
-TPRs = []
-FPRs = []
+#dice_scores = []
+# TPRs = []
+# FPRs = []
 
 IMG_HEIGHT = sliced_image_dataset.shape[1]
 IMG_WIDTH  = sliced_image_dataset.shape[2]
@@ -187,32 +187,28 @@ IMG_CHANNELS = sliced_image_dataset.shape[3]
 def get_model():
     return simple_unet_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS)
 
-model = get_model()
-
-n_splits = 5
+n_splits = 3
 
 kf = KFold(n_splits=n_splits, shuffle=True, random_state=0)
-
-histories = []
 
 # Iterate over each fold
 for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sliced_mask_dataset)):
     X_train, X_test = sliced_image_dataset[train_index], sliced_image_dataset[test_index]
     y_train, y_test = sliced_mask_dataset[train_index], sliced_mask_dataset[test_index]
 
+    model = get_model()
    
-    checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/best_model{i+3}.keras', monitor='val_loss', save_best_only=True)
+    checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras', monitor='val_loss', save_best_only=True)
 
     history = model.fit(X_train, y_train,
                         batch_size=16,
                         verbose=1,
                         epochs=300,
                         validation_data=(X_test, y_test),
-                        shuffle=False,
-                        callbacks=[checkpoint])
+                        shuffle=False
+                        callbacks = [checkpoint])
 
- 
-    histories.append(history)
+    #model.save(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras')
 
     plt.figure(figsize=(15,5))
     plt.subplot(1,2,1)
@@ -227,7 +223,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     plt.ylabel('dice_coef')
     plt.xlabel('Epoch')
     plt.tight_layout()
-    plt.savefig(f'C:/Users/Mittal/Desktop/kunet/process{i+3}.png')
+    plt.savefig(f'C:/Users/Mittal/Desktop/kunet/process{i}.png')
     plt.close()
 
     max_dice_coef = max(history.history['dice_coef'])
@@ -236,7 +232,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     print(max_dice_coef, file=f)
     f.close()
     
-    model.load_weights(f'C:/Users/Mittal/Desktop/kunet/best_model{i+3}.keras')
+    model.load_weights(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras')
 
     for z in range(5):
         test_img_number = random.randint(0, len(X_test))
@@ -250,15 +246,6 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
         alpha = 0.5 
         colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
-
-        #dice_score = dice_coef(ground_truth, prediction)
-        #dice_scores.append(dice_score)
-
-        tpr = tprf(ground_truth, prediction, 0.5)
-        TPRs.append(tpr)
-
-        fpr = fprf(ground_truth, prediction, 0.5)
-        FPRs.append(fpr)
 
         plt.figure(figsize=(16, 8))
         plt.subplot(141)
@@ -274,23 +261,195 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         plt.title("Overlayed Images")
         plt.imshow(original_image_normalized, cmap='gray')
         plt.imshow(colored_mask, cmap='jet')
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/fold{i+3}_{z}.png')
+        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/fold{i}_{z}.png')
         plt.close()
         
 #average_dice_coef = np.mean(dice_scores)
 
-average_tpr = np.mean(TPRs)
+# average_tpr = np.mean(TPRs)
 
-average_fpr = np.mean(FPRs)
+# average_fpr = np.mean(FPRs)
 
-f = open("C:/Users/Mittal/Desktop/kunet/output.txt", "a")
-#print('average prediction dice score', file=f)
-#print(average_dice_coef, file=f)
-print('average prediction tpr', file=f)
-print(average_tpr, file=f)
-print('average prediction fpr', file=f)
-print(average_fpr, file=f)
-f.close()
+# f = open("C:/katelynzhao/Desktop/kunet/output.txt", "a")
+# #print('average prediction dice score', file=f)
+# #print(average_dice_coef, file=f)
+# print('average prediction tpr', file=f)
+# print(average_tpr, file=f)
+# print('average prediction fpr', file=f)
+# print(average_fpr, file=f)
+# f.close()
 
+for i in range(n_splits):
+    for j in range(10):
+        patient_num = random.randint(0, len(image_dataset))
+        anatomical = []
+        labels = []
+        predictions = []
+        original = []
+        colored_masks = []
+        for k in range(10):
+            slice_num = random.randint(0, image_dataset[patient_num].shape[2]-1)
+            anatomical.append(image_dataset[patient_num][:,:,slice_num])
+
+        for k in range(10):
+            slice_num = random.randint(0, mask_dataset[patient_num].shape[2]-1)
+            labels.append(mask_dataset[patient_num][:,:,slice_num])
+
+        anatomical = np.expand_dims(np.array(anatomical),3)
+        labels = np.expand_dims((np.array(labels)),3)
+
+        for k in range(0, len(anatomical)):
+            test_img = anatomical[k]
+            ground_truth = labels[k]
+            test_img_norm = test_img[:,:,0][:,:,None]
+            test_img_input = np.expand_dims(test_img_norm, 0)
+            prediction = (model.predict(test_img_input)[0,:,:,0] > 0.5).astype(np.uint8)
+            predictions.append(prediction)
+
+            original_image_normalized = ground_truth.astype(float) / np.max(ground_truth)
+            original.append(original_image_normalized)
+            colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
+            alpha = 0.5 
+            colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
+            colored_masks.append(colored_mask)
+            
+        
+        plt.figure(figsize=(16, 16))
+        plt.subplot(5,4,1)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[0][:,:,0], cmap='gray')
+        plt.subplot(5,4,2)
+        plt.title('Testing Label')
+        plt.imshow(labels[0][:,:,0], cmap='gray')
+        plt.subplot(5,4,3)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[0], cmap='gray')
+        plt.subplot(5,4,4)
+        plt.title("Overlayed Images")
+        plt.imshow(original[0], cmap='gray')
+        plt.imshow(colored_masks[0], cmap='jet')
+        plt.subplot(5,4,5)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[1][:,:,0], cmap='gray')
+        plt.subplot(5,4,6)
+        plt.title('Testing Label')
+        plt.imshow(labels[1][:,:,0], cmap='gray')
+        plt.subplot(5,4,7)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[1], cmap='gray')
+        plt.subplot(5,4,8)
+        plt.title("Overlayed Images")
+        plt.imshow(original[1], cmap='gray')
+        plt.imshow(colored_masks[1], cmap='jet')
+        plt.subplot(5,4,9)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[2][:,:,0], cmap='gray')
+        plt.subplot(5,4,10)
+        plt.title('Testing Label')
+        plt.imshow(labels[2][:,:,0], cmap='gray')
+        plt.subplot(5,4,11)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[2], cmap='gray')
+        plt.subplot(5,4,12)
+        plt.title("Overlayed Images")
+        plt.imshow(original[2], cmap='gray')
+        plt.imshow(colored_masks[2], cmap='jet')
+        plt.subplot(5,4,13)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[3][:,:,0], cmap='gray')
+        plt.subplot(5,4,14)
+        plt.title('Testing Label')
+        plt.imshow(labels[3][:,:,0], cmap='gray')
+        plt.subplot(5,4,15)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[3], cmap='gray')
+        plt.subplot(5,4,16)
+        plt.title("Overlayed Images")
+        plt.imshow(original[3], cmap='gray')
+        plt.imshow(colored_masks[3], cmap='jet')
+        plt.subplot(5,4,17)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[4][:,:,0], cmap='gray')
+        plt.subplot(5,4,18)
+        plt.title('Testing Label')
+        plt.imshow(labels[4][:,:,0], cmap='gray')
+        plt.subplot(5,4,19)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[4], cmap='gray')
+        plt.subplot(5,4,20)
+        plt.title("Overlayed Images")
+        plt.imshow(original[4], cmap='gray')
+        plt.imshow(colored_masks[4], cmap='jet')
+        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/patient{j}_01234.png')
+        plt.close()
+
+        plt.figure(figsize=(16, 16))
+        plt.subplot(5,4,1)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[5][:,:,0], cmap='gray')
+        plt.subplot(5,4,2)
+        plt.title('Testing Label')
+        plt.imshow(labels[5][:,:,0], cmap='gray')
+        plt.subplot(5,4,3)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[5], cmap='gray')
+        plt.subplot(5,4,4)
+        plt.title("Overlayed Images")
+        plt.imshow(original[5], cmap='gray')
+        plt.imshow(colored_masks[5], cmap='jet')
+        plt.subplot(5,4,5)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[6][:,:,0], cmap='gray')
+        plt.subplot(5,4,6)
+        plt.title('Testing Label')
+        plt.imshow(labels[6][:,:,0], cmap='gray')
+        plt.subplot(5,4,7)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[6], cmap='gray')
+        plt.subplot(5,4,8)
+        plt.title("Overlayed Images")
+        plt.imshow(original[6], cmap='gray')
+        plt.imshow(colored_masks[6], cmap='jet')
+        plt.subplot(5,4,9)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[7][:,:,0], cmap='gray')
+        plt.subplot(5,4,10)
+        plt.title('Testing Label')
+        plt.imshow(labels[7][:,:,0], cmap='gray')
+        plt.subplot(5,4,11)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[7], cmap='gray')
+        plt.subplot(5,4,12)
+        plt.title("Overlayed Images")
+        plt.imshow(original[7], cmap='gray')
+        plt.imshow(colored_masks[7], cmap='jet')
+        plt.subplot(5,4,13)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[8][:,:,0], cmap='gray')
+        plt.subplot(5,4,14)
+        plt.title('Testing Label')
+        plt.imshow(labels[8][:,:,0], cmap='gray')
+        plt.subplot(5,4,15)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[8], cmap='gray')
+        plt.subplot(5,4,16)
+        plt.title("Overlayed Images")
+        plt.imshow(original[8], cmap='gray')
+        plt.imshow(colored_masks[8], cmap='jet')
+        plt.subplot(5,4,17)
+        plt.title('Testing Image')
+        plt.imshow(anatomical[9][:,:,0], cmap='gray')
+        plt.subplot(5,4,18)
+        plt.title('Testing Label')
+        plt.imshow(labels[9][:,:,0], cmap='gray')
+        plt.subplot(5,4,19)
+        plt.title('Prediction on test image')
+        plt.imshow(predictions[9], cmap='gray')
+        plt.subplot(5,4,20)
+        plt.title("Overlayed Images")
+        plt.imshow(original[9], cmap='gray')
+        plt.imshow(colored_masks[9], cmap='jet')
+        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/patient{j}_56789.png')
+        plt.close()
 
 
