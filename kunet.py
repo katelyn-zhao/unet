@@ -2,11 +2,13 @@ import os
 import io
 import random
 import nibabel
+import cv2
 import numpy as np
 import nibabel as nib
 from nibabel import load
 import tensorflow as tf
 import matplotlib.pyplot as plt
+from PIL import Image
 from keras.utils import Sequence
 from IPython.display import Image, display
 from skimage.exposure import rescale_intensity
@@ -26,33 +28,33 @@ def dice_coef(y_true, y_pred, smooth=1.):
   intersection = tf.keras.backend.sum(y_true_f * y_pred_f)
   return (2. * intersection + smooth) / (tf.keras.backend.sum(y_true_f) + tf.keras.backend.sum(y_pred_f) + smooth)
 
-# def tprf(y_true, y_prob, threshold):
-#     y_pred = (y_prob >= threshold)
+def tpr(y_true, y_prob, threshold):
+    y_pred = (y_prob >= threshold)
    
-#     tp = np.sum((y_pred == 1) & (y_true == 1))
+    tp = np.sum((y_pred == 1) & (y_true == 1))
 
-#     fn = np.sum((y_pred == 0) & (y_true == 1))
+    fn = np.sum((y_pred == 0) & (y_true == 1))
 
-#     if (tp == 0):
-#         tpr = 0
-#     else:
-#         tpr = tp / (tp + fn)
+    if (tp == 0):
+        tpr = 0
+    else:
+        tpr = tp / (tp + fn)
 
-#     return tpr
+    return tpr
 
-# def fprf(y_true, y_prob, threshold):
-#     y_pred = (y_prob >= threshold)
+def fpr(y_true, y_prob, threshold):
+    y_pred = (y_prob >= threshold)
 
-#     fp = np.sum((y_pred == 1) & (y_true == 0))
+    fp = np.sum((y_pred == 1) & (y_true == 0))
 
-#     tn = np.sum((y_pred == 0) & (y_true == 0))
+    tn = np.sum((y_pred == 0) & (y_true == 0))
     
-#     if (fp == 0):
-#         fpr = 0
-#     else:
-#         fpr = fp / (fp + tn)
+    if (fp == 0):
+        fpr = 0
+    else:
+        fpr = fp / (fp + tn)
 
-#     return fpr
+    return fpr
 
 
 ################################################################################################################################
@@ -65,58 +67,104 @@ def simple_unet_model(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
 
     #Contraction path
     c1 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(s)
+    c1 = BatchNormalization()(c1)
+    c1 = Dropout(0.1)(c1)
+    c1 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(s)
+    c1 = BatchNormalization()(c1)
     c1 = Dropout(0.1)(c1)
     c1 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c1)
+    c1 = BatchNormalization()(c1)
     p1 = MaxPooling2D((2, 2))(c1)
     
     c2 = Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p1)
+    c2 = BatchNormalization()(c2)
+    c2 = Dropout(0.1)(c2)
+    c2 = Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p1)
+    c2 = BatchNormalization()(c2)
     c2 = Dropout(0.1)(c2)
     c2 = Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c2)
+    c2 = BatchNormalization()(c2)
     p2 = MaxPooling2D((2, 2))(c2)
      
     c3 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p2)
+    c3 = BatchNormalization()(c3)
+    c3 = Dropout(0.2)(c3)
+    c3 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p2)
+    c3 = BatchNormalization()(c3)
     c3 = Dropout(0.2)(c3)
     c3 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c3)
+    c3 = BatchNormalization()(c3)
     p3 = MaxPooling2D((2, 2))(c3)
      
     c4 = Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p3)
+    c4 = BatchNormalization()(c4)
+    c4 = Dropout(0.2)(c4)
+    c4 = Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p3)
+    c4 = BatchNormalization()(c4)
     c4 = Dropout(0.2)(c4)
     c4 = Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c4)
+    c4 = BatchNormalization()(c4)
     p4 = MaxPooling2D(pool_size=(2, 2))(c4)
      
     c5 = Conv2D(256, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p4)
+    c5 = BatchNormalization()(c5)
+    c5 = Dropout(0.3)(c5)
+    c5 = Conv2D(256, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(p4)
+    c5 = BatchNormalization()(c5)
     c5 = Dropout(0.3)(c5)
     c5 = Conv2D(256, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c5)
+    c5 = BatchNormalization()(c5)
+    p5 = MaxPooling2D(pool_size=(2,2))(c5)
     
     #Expansive path 
     u6 = Conv2DTranspose(128, (2, 2), strides=(2, 2), padding='same')(c5)
     u6 = concatenate([u6, c4])
     c6 = Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u6)
-    c6 = Dropout(0.2)(c6)
+    c6 = BatchNormalization()(c6)
+    c6 = Dropout(0.3)(c6)
+    c6 = Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u6)
+    c6 = BatchNormalization()(c6)
+    c6 = Dropout(0.3)(c6)
     c6 = Conv2D(128, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c6)
+    c6 = BatchNormalization()(c6)
      
     u7 = Conv2DTranspose(64, (2, 2), strides=(2, 2), padding='same')(c6)
     u7 = concatenate([u7, c3])
     c7 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u7)
+    c7 = BatchNormalization()(c7)
+    c7 = Dropout(0.2)(c7)
+    c7 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u7)
+    c7 = BatchNormalization()(c7)
     c7 = Dropout(0.2)(c7)
     c7 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c7)
+    c7 = BatchNormalization()(c7)
      
     u8 = Conv2DTranspose(32, (2, 2), strides=(2, 2), padding='same')(c7)
     u8 = concatenate([u8, c2])
     c8 = Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u8)
-    c8 = Dropout(0.1)(c8)
+    c8 = BatchNormalization()(c8)
+    c8 = Dropout(0.2)(c8)
+    c8 = Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u8)
+    c8 = BatchNormalization()(c8)
+    c8 = Dropout(0.2)(c8)
     c8 = Conv2D(32, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c8)
+    c8 = BatchNormalization()(c8)
      
     u9 = Conv2DTranspose(16, (2, 2), strides=(2, 2), padding='same')(c8)
     u9 = concatenate([u9, c1], axis=3)
     c9 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u9)
+    c9 = BatchNormalization()(c9)
+    c9 = Dropout(0.1)(c9)
+    c9 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(u9)
+    c9 = BatchNormalization()(c9)
     c9 = Dropout(0.1)(c9)
     c9 = Conv2D(16, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c9)
+    c9 = BatchNormalization()(c9)
      
     outputs = Conv2D(1, (1, 1), activation='sigmoid')(c9)
      
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='bce', metrics=[dice_coef])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3), loss='bce', metrics=[dice_coef, tpr, fpr])
     model.summary()
     
     return model
@@ -140,7 +188,7 @@ for i, image_name in enumerate(images):
         image = np.array(image.get_fdata())
         #image = resize(image, (SIZE, SIZE))
         image_dataset.append(np.array(image))
-
+        
 masks = os.listdir(mask_directory)
 for i, image_name in enumerate(masks):
     if (image_name.split('.')[1] == 'nii'):
@@ -152,20 +200,34 @@ for i, image_name in enumerate(masks):
 for i in range(len(image_dataset)):
     for j in range(image_dataset[i].shape[2]):
         sliced_image_dataset.append(image_dataset[i][:,:,j])
-
-for i in range(len(mask_dataset)):
-    for j in range(mask_dataset[i].shape[2]):
-        if i == 16 and j == 25:
-            continue
+        sliced_mask_dataset.append(mask_dataset[i][:,:,j])
+        #Adding randomly rotated slices
+        cw = random.randint(0,1)
+        angle = random.randint(10, 20)
+        if cw:
+            sliced_image_dataset.append(image_dataset[i][:,:,j].rotate(angle))
+            sliced_mask_dataset.append(mask_dataset[i][:,:,j].rotate(angle))
         else:
-            sliced_mask_dataset.append(mask_dataset[i][:,:,j])
+            sliced_image_dataset.append(image_dataset[i][:,:,j].rotate(angle * -1))
+            sliced_mask_dataset.append(mask_dataset[i][:,:,j].rotate(angle * -1))
+        #contrast adjustment
+        adjust = random.randint(0,1)
+        if adjust:
+            sliced_image_dataset.append(cv2.equalizeHist(image_dataset[i][:,:,j]))
+            sliced_mask_dataset.append(cv2.equalizeHist(mask_dataset[i][:,:,j]))
+        if adjust and cw:
+            sliced_image_dataset.append(cv2.equalizeHist(image_dataset[i][:,:,j].rotate(angle)))
+            sliced_mask_dataset.append(cv2.equalizeHist(mask_dataset[i][:,:,j].rotate(angle)))
+
+
+
 
 #Normalize images
 sliced_image_dataset = np.expand_dims(np.array(sliced_image_dataset),3)
 #D not normalize masks, just rescale to 0 to 1.
 sliced_mask_dataset = np.expand_dims((np.array(sliced_mask_dataset)),3)
 
-#Sanity check, view a few images
+# Sanity check, view a few images
 # image_number = random.randint(0, len(X_train))
 # plt.figure(figsize=(12, 6))
 # plt.subplot(121)
@@ -196,19 +258,26 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     X_train, X_test = sliced_image_dataset[train_index], sliced_image_dataset[test_index]
     y_train, y_test = sliced_mask_dataset[train_index], sliced_mask_dataset[test_index]
 
+    f = open("kunet/output.txt", "a")
+    print("X-Training: ", len(X_train), file=f)
+    print("X-Testing: ", len(X_test), file=f)
+    print("Y-Training: ", len(y_train), file=f)
+    print("Y-Testing: ", len(y_test), file=f)
+    f.close()
+
     model = get_model()
    
-    checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras', monitor='val_loss', save_best_only=True)
+    #checkpoint = ModelCheckpoint(f'kunet/best_model{i}.keras', monitor='val_loss', save_best_only=True)
 
     history = model.fit(X_train, y_train,
                         batch_size=16,
                         verbose=1,
-                        epochs=300,
+                        epochs=1,
                         validation_data=(X_test, y_test),
-                        shuffle=False
-                        callbacks = [checkpoint])
+                        shuffle=False)
+                        #callbacks = [checkpoint]
 
-    #model.save(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras')
+    model.save(f'kunet/best_model{i}.keras')
 
     plt.figure(figsize=(15,5))
     plt.subplot(1,2,1)
@@ -223,16 +292,16 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     plt.ylabel('dice_coef')
     plt.xlabel('Epoch')
     plt.tight_layout()
-    plt.savefig(f'C:/Users/Mittal/Desktop/kunet/process{i}.png')
+    plt.savefig(f'kunet/process{i}.png')
     plt.close()
 
     max_dice_coef = max(history.history['dice_coef'])
 
-    f = open("C:/Users/Mittal/Desktop/kunet/output.txt", "a")
+    f = open("kunet/output.txt", "a")
     print(max_dice_coef, file=f)
     f.close()
     
-    model.load_weights(f'C:/Users/Mittal/Desktop/kunet/best_model{i}.keras')
+    model.load_weights(f'kunet/best_model{i}.keras')
 
     for z in range(5):
         test_img_number = random.randint(0, len(X_test))
@@ -261,7 +330,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         plt.title("Overlayed Images")
         plt.imshow(original_image_normalized, cmap='gray')
         plt.imshow(colored_mask, cmap='jet')
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/fold{i}_{z}.png')
+        plt.savefig(f'kunet/predict/fold{i}_{z}.png')
         plt.close()
         
 #average_dice_coef = np.mean(dice_scores)
@@ -380,7 +449,7 @@ for i in range(n_splits):
         plt.title("Overlayed Images")
         plt.imshow(original[4], cmap='gray')
         plt.imshow(colored_masks[4], cmap='jet')
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/patient{j}_01234.png')
+        plt.savefig(f'kunet/predict/patient{j}_01234.png')
         plt.close()
 
         plt.figure(figsize=(16, 20))
@@ -449,7 +518,7 @@ for i in range(n_splits):
         plt.title("Overlayed Images")
         plt.imshow(original[9], cmap='gray')
         plt.imshow(colored_masks[9], cmap='jet')
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/predict/patient{j}_56789.png')
+        plt.savefig(f'kunet/predict/patient{j}_56789.png')
         plt.close()
 
 
