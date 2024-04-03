@@ -203,22 +203,22 @@ for i in range(len(image_dataset)):
         sliced_mask_dataset.append(mask_dataset[i][:,:,j])
         #Adding randomly rotated slices
         cw = random.randint(0,1)
-        angle = random.randint(10, 20)
+        angle = random.randint(5, 10)
         if cw:
-            sliced_image_dataset.append(image_dataset[i][:,:,j].rotate(angle))
-            sliced_mask_dataset.append(mask_dataset[i][:,:,j].rotate(angle))
+            sliced_image_dataset.append(rotate(image_dataset[i][:,:,j], angle, reshape = False))
+            sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle, reshape = False))
         else:
-            sliced_image_dataset.append(image_dataset[i][:,:,j].rotate(angle * -1))
-            sliced_mask_dataset.append(mask_dataset[i][:,:,j].rotate(angle * -1))
+            sliced_image_dataset.append(rotate(image_dataset[i][:,:,j], angle * -1, reshape = False))
+            sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False))
         #contrast adjustment
         adjust = random.randint(0,1)
+        contrast = random.randint(1, 2)
         if adjust:
-            sliced_image_dataset.append(cv2.equalizeHist(image_dataset[i][:,:,j]))
-            sliced_mask_dataset.append(cv2.equalizeHist(mask_dataset[i][:,:,j]))
+            sliced_image_dataset.append(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0))
+            sliced_mask_dataset.append(cv2.convertScaleAbs(mask_dataset[i][:,:,j], alpha = contrast, beta = 0))
         if adjust and cw:
-            sliced_image_dataset.append(cv2.equalizeHist(image_dataset[i][:,:,j].rotate(angle)))
-            sliced_mask_dataset.append(cv2.equalizeHist(mask_dataset[i][:,:,j].rotate(angle)))
-
+            sliced_image_dataset.append(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False))
+            sliced_mask_dataset.append(rotate(cv2.convertScaleAbs(mask_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False))
 
 
 
@@ -259,6 +259,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     y_train, y_test = sliced_mask_dataset[train_index], sliced_mask_dataset[test_index]
 
     f = open("kunet/output.txt", "a")
+    print("FOLD--------------------------------")
     print("X-Training: ", len(X_train), file=f)
     print("X-Testing: ", len(X_test), file=f)
     print("Y-Training: ", len(y_train), file=f)
@@ -272,7 +273,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     history = model.fit(X_train, y_train,
                         batch_size=16,
                         verbose=1,
-                        epochs=1,
+                        epochs=300,
                         validation_data=(X_test, y_test),
                         shuffle=False)
                         #callbacks = [checkpoint]
@@ -296,9 +297,11 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
     plt.close()
 
     max_dice_coef = max(history.history['dice_coef'])
+    max_val_dice_coef = max(history.history['val_dice_coef'])
 
     f = open("kunet/output.txt", "a")
-    print(max_dice_coef, file=f)
+    print("Max Dice Score: ", max_dice_coef, file=f)
+    print("Max Val Dice Score: ", max_val_dice_coef, file=f)
     f.close()
     
     model.load_weights(f'kunet/best_model{i}.keras')
