@@ -1,0 +1,61 @@
+sliced image dataset:  4687
+FOLD----------------------------------
+x-training:  3749
+x-testing:  938
+y-training:  3749
+y-testing:  938
+max dice coef:  0.9408178925514221
+max val dice coef:  0.9389389753341675
+max tpr:  0.9570253491401672
+min fpr:  0.0004650034534279257
+average prediction dice score:  0.943082520431243
+average prediction tpr:  11.593933
+average prediction fpr:  6.117174
+FOLD----------------------------------
+x-training:  3749
+x-testing:  938
+y-training:  3749
+y-testing:  938
+max dice coef:  0.9338635802268982
+max val dice coef:  0.9342889189720154
+max tpr:  0.9569680690765381
+min fpr:  2.4791783289401792e-05
+average prediction dice score:  0.9311026864944045
+average prediction tpr:  13.455152
+average prediction fpr:  7.695891
+FOLD----------------------------------
+x-training:  3750
+x-testing:  937
+y-training:  3750
+y-testing:  937
+max dice coef:  0.9440236687660217
+max val dice coef:  0.9400489926338196
+max tpr:  0.9544715881347656
+min fpr:  0.0005438896478153765
+average prediction dice score:  0.9244172944786816
+average prediction tpr:  17.894058
+average prediction fpr:  7.9699864
+FOLD----------------------------------
+x-training:  3750
+x-testing:  937
+y-training:  3750
+y-testing:  937
+max dice coef:  0.9329935908317566
+max val dice coef:  0.937087893486023
+max tpr:  0.947201669216156
+min fpr:  6.973274139454588e-06
+average prediction dice score:  0.9257966413306724
+average prediction tpr:  13.196295
+average prediction fpr:  6.7826314
+FOLD----------------------------------
+x-training:  3750
+x-testing:  937
+y-training:  3750
+y-testing:  937
+max dice coef:  0.9269530773162842
+max val dice coef:  0.9336931705474854
+max tpr:  0.9420534372329712
+min fpr:  3.3295771572738886e-05
+average prediction dice score:  0.9077176042936774
+average prediction tpr:  14.284375
+average prediction fpr:  7.0156946
