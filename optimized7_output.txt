@@ -1,0 +1,37 @@
+sliced image dataset:  4649
+FOLD----------------------------------
+x-training:  3719
+x-testing:  930
+y-training:  3719
+y-testing:  930
+max dice coef:  0.9528263211250305
+max val dice coef:  0.9437326192855835
+max tpr:  0.9578015804290771
+min fpr:  0.000508153869304806
+average prediction dice score:  0.9326606785887186
+average prediction tpr:  12.844231
+average prediction fpr:  6.6772847
+FOLD----------------------------------
+x-training:  3719
+x-testing:  930
+y-training:  3719
+y-testing:  930
+max dice coef:  0.946595311164856
+max val dice coef:  0.9448130130767822
+max tpr:  0.9558534622192383
+min fpr:  7.06886567058973e-06
+average prediction dice score:  0.9431939832308555
+average prediction tpr:  13.8748865
+average prediction fpr:  7.0464673
+FOLD----------------------------------
+x-training:  3719
+x-testing:  930
+y-training:  3719
+y-testing:  930
+max dice coef:  0.9542136192321777
+max val dice coef:  0.944256067276001
+max tpr:  0.9509398341178894
+min fpr:  1.2793339010386262e-05
+average prediction dice score:  0.9067604457962201
+average prediction tpr:  12.946376
+average prediction fpr:  6.357284
