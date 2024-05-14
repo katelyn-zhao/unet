@@ -79,11 +79,57 @@ def fpr(y_true, y_pred, threshold=0.5):
     mean_fpr = total_fpr / num_class
     return mean_fpr
 
+def dice_coef_p(y_true, y_pred, smooth=1.):
+    num_classes = 10
+    total_dice_score = 0
+    num_class = 0
+    for class_idx in range(num_classes):
+        intersection = np.sum(y_true[..., class_idx] * y_pred[..., class_idx])
+        union = np.sum(y_true[..., class_idx]) + np.sum(y_pred[..., class_idx])
+        dice_score = (2.0 * intersection + smooth) / (union + smooth)
+        total_dice_score += dice_score
+        num_class += 1
+    mean_dice_score = total_dice_score / num_class
+    return mean_dice_score
 
+def tpr_p(y_true, y_pred, threshold=0.5):
+    num_classes = 10
+    total_tpr = 0
+    num_class = 0
+    for class_idx in range(num_classes):
+        y_pred_thresh = (y_pred[..., class_idx] >= threshold)
+        tp = np.sum((y_pred_thresh == 1) & (y_true[..., class_idx] == 1))
+        fn = np.sum((y_pred_thresh == 0) & (y_true[..., class_idx] == 1))
+        if (tp == 0):
+            tpr = 0
+        else:
+            tpr = tp / (tp + fn)
+        total_tpr += tpr
+        num_class += 1
+    mean_tpr = total_tpr / num_class
+    return mean_tpr
+
+
+def fpr_p(y_true, y_pred, threshold=0.5):
+    num_classes = 10
+    total_fpr = 0
+    num_class = 0
+    for class_idx in range(num_classes):
+        y_pred_thresh = (y_pred[..., class_idx] >= threshold)
+        fp = np.sum((y_pred_thresh == 1) & (y_true[..., class_idx] == 0))
+        tn = np.sum((y_pred_thresh == 0) & (y_true[..., class_idx] == 0))
+        if (fp == 0):
+            fpr = 0
+        else:
+            fpr = fp / (fp + tn)
+        total_fpr += fpr
+        num_class += 1
+    mean_fpr = total_fpr / num_class
+    return mean_fpr
 
 ##############################################################################################
 
-def multi_unet_model(n_classes=9, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1):
+def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1):
 #Build the model
     inputs = Input((IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS))
     #s = Lambda(lambda x: x / 255)(inputs)   #No need for this if we normalize our inputs beforehand
@@ -245,7 +291,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         history = model.fit(X_train, y_train_cat, 
                             batch_size=16, 
                             verbose=1, 
-                            epochs=300, 
+                            epochs=800, 
                             validation_data=(X_test, y_test_cat), 
                             shuffle=False,
                             callbacks=[checkpoint])
@@ -338,111 +384,3 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         f.close()
 
 ##############################################################################################
-# ##############################################################################################
-
-# from sklearn.utils import class_weight
-# class_weights = class_weight.compute_class_weight('balanced', np.unique(sliced_masks_reshaped_encoded), sliced_masks_reshaped_encoded)
-
-# f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/output_with_weights.txt', "a")
-# print("Class weights are...:", class_weights, file=f)
-# f.close()
-
-# IMG_HEIGHT = X_train.shape[1]
-# IMG_WIDTH  = X_train.shape[2]
-# IMG_CHANNELS = X_train.shape[3]
-
-# def get_model():
-#     return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
-
-# model = get_model()
-
-# checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/multikunet/multi_kunet0_with_weights.h5', monitor='val_loss', save_best_only=True)
-
-# history = model.fit(X_train, y_train_cat, 
-#                     batch_size=16, 
-#                     verbose=1, 
-#                     epochs=5, 
-#                     validation_data=(X_test, y_test_cat), 
-#                     class_weight=class_weights,
-#                     shuffle=False,
-#                     callbacks=[checkpoint])
-                    
-# #Evaluate the model
-# plt.figure(figsize=(15,5))
-# plt.subplot(1,2,1)
-# plt.plot(history.history['loss'], color='r')
-# plt.plot(history.history['val_loss'])
-# plt.ylabel('Losses')
-# plt.xlabel('Epoch')
-# plt.legend(['Train', 'Val.'], loc='upper right')
-# plt.subplot(1,2,2)
-# plt.plot(history.history['dice_coef'], color='r')
-# plt.plot(history.history['val_dice_coef'])
-# plt.ylabel('dice_coef')
-# plt.xlabel('Epoch')
-# plt.tight_layout()
-# plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet_process0_with_weights.png')
-# plt.close()
-
-# max_dice_coef = max(history.history['dice_coef'])
-# max_val_dice_coef = max(history.history['val_dice_coef'])
-
-# f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/output_with_weights.txt', "a")
-# print("Max Dice Score: ", max_dice_coef, file=f)
-# print("Max Val Dice Score: ", max_val_dice_coef, file=f)
-# f.close()
-    
-# model.load_weights(f'C:/Users/Mittal/Desktop/kunet/multikunet/multi_kunet0_with_weights.h5')
-
-# dice_scores = []
-
-# for z in range(25):
-#     test_img_number = random.randint(0, len(X_test)-1)
-#     test_img = X_test[test_img_number]
-#     ground_truth = y_test[test_img_number]
-#     test_img_norm = test_img[:,:,0][:,:,None]
-#     test_img_input = np.expand_dims(test_img_norm, 0)
-#     prediction = (model.predict(test_img_input))
-#     predicted_img = np.argmax(prediction, axis=3)[0,:,:]
-
-#     # shape = prediction.shape
-#     # prediction_dice = prediction
-
-#     # for row in range(shape[0]): 
-#     #     for col in range(shape[1]):
-#     #         if (prediction[0, row, col, 0] <= 0.5):
-#     #             prediction_dice[row, col] == 0
-
-#     # prediction_dice = prediction_dice.astype(np.float32)
-#     # ground_truth_dice = ground_truth.astype(np.float32)
-
-#     # dice_score = dice_coef(ground_truth_dice, prediction_dice)
-#     # dice_scores.append(dice_score)
-
-#     # original_image_normalized = ground_truth.astype(float) / np.max(ground_truth)
-#     # colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
-#     # alpha = 0.5 
-#     # colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
-
-#     plt.figure(figsize=(16, 8))
-#     plt.subplot(131)
-#     plt.title('Testing Image')
-#     plt.imshow(test_img[:,:,0], cmap='gray')
-#     plt.subplot(132)
-#     plt.title('Testing Label')
-#     plt.imshow(ground_truth[:,:,0], cmap='jet')
-#     plt.subplot(133)
-#     plt.title('Prediction on test image')
-#     plt.imshow(predicted_img, cmap='jet')
-#     # plt.subplot(144)
-#     # plt.title("Overlayed Images")
-#     # plt.imshow(original_image_normalized, cmap='jet')
-#     # plt.imshow(colored_mask, cmap='jet')
-#     plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/predict/prediction_with_weights_{z}.png')
-#     plt.close()
-
-# f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/output_with_weights.txt', "a")
-# print("Average Prediction Dice Score: ", np.mean(dice_scores), file=f)
-# f.close()
-
-# ##############################################################################################
