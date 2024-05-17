@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 import os
-import nibabel
 import cv2
 import numpy as np
 import nibabel as nib
@@ -14,10 +13,6 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 from PIL import Image
 from scipy.ndimage import rotate
-from keras.utils import Sequence
-from IPython.display import Image, display
-from skimage.exposure import rescale_intensity
-from skimage.segmentation import mark_boundaries
 from keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
 from keras.utils import normalize
 from sklearn.model_selection import train_test_split
@@ -44,6 +39,19 @@ def dice_coef(y_true, y_pred):
         num_class = num_class + 1.0
     mean_dice_score = total_dice / num_class
     return mean_dice_score
+
+
+def multi_class_focal_loss(gamma=2.0, alpha=0.25):
+    def focal_loss_fixed(y_true, y_pred):
+        epsilon = tf.keras.backend.epsilon()
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
+        y_true = tf.cast(y_true, tf.float32)
+        # Cross-entropy part
+        cross_entropy = -y_true * tf.math.log(y_pred)
+        # Focal loss part
+        loss = alpha * tf.math.pow(1 - y_pred, gamma) * cross_entropy
+        return tf.reduce_mean(tf.reduce_sum(loss, axis=1))
+    return focal_loss_fixed
 
 ##############################################################################################
 
@@ -197,192 +205,100 @@ y_test_cat = to_categorical(y_test, num_classes=n_classes)
 
 ##############################################################################################
 
+def manual_class_weight_dict(labels):
+    class_count = Counter(labels)
+    total = sum(class_count.values())
+    classes = sorted(class_count.keys())
+    class_weights = {cls: total / (len(class_count) * class_count[cls]) for cls in classes}
+    return class_weights
+
+class_weights = manual_class_weight_dict(sliced_masks_encoded_original_shape)
+print("Class weights:", class_weights)
+
+focal_loss = multi_class_focal_loss(gamma=2, alpha=class_weights)
+
 IMG_HEIGHT = X_train.shape[1]
 IMG_WIDTH  = X_train.shape[2]
 IMG_CHANNELS = X_train.shape[3]
 
-# def get_model():
-#     return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
+def get_model():
+    return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
 
-# model = get_model()
+model = get_model()
 
-# history = model.fit(X_train, y_train_cat, 
-#                     batch_size = 16, 
-#                     verbose=1, 
-#                     epochs=2, 
-#                     validation_data=(X_test, y_test_cat), 
-#                     #class_weight=class_weights,
-#                     shuffle=False)
+history = model.fit(X_train, y_train_cat, 
+                    batch_size = 16, 
+                    verbose=1, 
+                    epochs=2, 
+                    validation_data=(X_test, y_test_cat), 
+                    shuffle=False)
                     
-# model.save('multi_unet0.h5')
+model.save('multi_unet0.h5')
 
-# ##############################################################################################
+#Evaluate the model
+plt.figure(figsize=(15,5))
+plt.subplot(1,2,1)
+plt.plot(history.history['loss'], color='r')
+plt.plot(history.history['val_loss'])
+plt.ylabel('Losses')
+plt.xlabel('Epoch')
+plt.legend(['Train', 'Val.'], loc='upper right')
+plt.subplot(1,2,2)
+plt.plot(history.history['dice_coef'], color='r')
+plt.plot(history.history['val_dice_coef'])
+plt.ylabel('dice_coef')
+plt.xlabel('Epoch')
+plt.tight_layout()
+plt.savefig(f'multikunet/process.png')
+plt.close()
 
-# #Evaluate the model
-# plt.figure(figsize=(15,5))
-# plt.subplot(1,2,1)
-# plt.plot(history.history['loss'], color='r')
-# plt.plot(history.history['val_loss'])
-# plt.ylabel('Losses')
-# plt.xlabel('Epoch')
-# plt.legend(['Train', 'Val.'], loc='upper right')
-# plt.subplot(1,2,2)
-# plt.plot(history.history['dice_coef'], color='r')
-# plt.plot(history.history['val_dice_coef'])
-# plt.ylabel('dice_coef')
-# plt.xlabel('Epoch')
-# plt.tight_layout()
-# plt.savefig(f'multikunet/process.png')
-# plt.close()
+max_dice_coef = max(history.history['dice_coef'])
+max_val_dice_coef = max(history.history['val_dice_coef'])
 
-# max_dice_coef = max(history.history['dice_coef'])
-# max_val_dice_coef = max(history.history['val_dice_coef'])
-
-# f = open("multikunet/output.txt", "a")
-# print("Max Dice Score: ", max_dice_coef, file=f)
-# print("Max Val Dice Score: ", max_val_dice_coef, file=f)
-# f.close()
+f = open("multikunet/output.txt", "a")
+print("Max Dice Score: ", max_dice_coef, file=f)
+print("Max Val Dice Score: ", max_val_dice_coef, file=f)
+f.close()
     
-# model.load_weights(f'multikunet/multi_unet0.h5')
+model.load_weights(f'multikunet/multi_unet0.h5')
 
-# dice_scores = []
+dice_scores = []
 
-# for z in range(len(X_test)):
-#     test_img_number = random.randint(0, len(X_test))
-#     test_img = X_test[test_img_number]
-#     ground_truth = y_test[test_img_number]
-#     test_img_norm = test_img[:,:,0][:,:,None]
-#     test_img_input = np.expand_dims(test_img_norm, 0)
-#     prediction = (model.predict(test_img_input))
-#     predicted_img = np.argmax(prediction, axis=3)[0,:,:]
+for z in range(len(X_test)):
+    test_img_number = random.randint(0, len(X_test))
+    test_img = X_test[test_img_number]
+    ground_truth = y_test[test_img_number]
+    test_img_norm = test_img[:,:,0][:,:,None]
+    test_img_input = np.expand_dims(test_img_norm, 0)
+    prediction = (model.predict(test_img_input))
+    predicted_img = np.argmax(prediction, axis=3)[0,:,:]
 
-#     dice_scores.append(dice_coef(ground_truth, predicted_img))
+    dice_scores.append(dice_coef(ground_truth, predicted_img))
 
-#     # original_image_normalized = ground_truth.astype(float) / np.max(ground_truth)
-#     # colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
-#     # alpha = 0.5 
-#     # colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
+    # original_image_normalized = ground_truth.astype(float) / np.max(ground_truth)
+    # colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
+    # alpha = 0.5 
+    # colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
 
-#     plt.figure(figsize=(16, 8))
-#     plt.subplot(131)
-#     plt.title('Testing Image')
-#     plt.imshow(test_img[:,:,0], cmap='gray')
-#     plt.subplot(132)
-#     plt.title('Testing Label')
-#     plt.imshow(ground_truth[:,:,0], cmap='jet')
-#     plt.subplot(133)
-#     plt.title('Prediction on test image')
-#     plt.imshow(predicted_img, cmap='jet')
-#     # plt.subplot(144)
-#     # plt.title("Overlayed Images")
-#     # plt.imshow(original_image_normalized, cmap='jet')
-#     # plt.imshow(colored_mask, cmap='jet')
-#     plt.savefig(f'multikunet/predict/prediction_{z}.png')
-#     plt.close()
+    plt.figure(figsize=(16, 8))
+    plt.subplot(131)
+    plt.title('Testing Image')
+    plt.imshow(test_img[:,:,0], cmap='gray')
+    plt.subplot(132)
+    plt.title('Testing Label')
+    plt.imshow(ground_truth[:,:,0], cmap='jet')
+    plt.subplot(133)
+    plt.title('Prediction on test image')
+    plt.imshow(predicted_img, cmap='jet')
+    # plt.subplot(144)
+    # plt.title("Overlayed Images")
+    # plt.imshow(original_image_normalized, cmap='jet')
+    # plt.imshow(colored_mask, cmap='jet')
+    plt.savefig(f'multikunet/predict/prediction_{z}.png')
+    plt.close()
 
-# f = open("multikunet/output.txt", "a")
-# print("Average Prediction Dice Score: ", np.mean(dice_scores), file=f)
-# f.close()
+f = open("multikunet/output.txt", "a")
+print("Average Prediction Dice Score: ", np.mean(dice_scores), file=f)
+f.close()
 
 ##############################################################################################
-##############################################################################################
-
-def manual_class_weight(labels):
-    class_count = Counter(labels)
-    total = sum(class_count.values())
-    classes = sorted(class_count.keys())  # Sort the classes
-    class_weights = [total / (len(class_count) * class_count[cls]) for cls in classes]
-    return class_weights
-
-# Calculate class weights
-class_weights = manual_class_weight(sliced_masks_reshaped_encoded)
-print("Class weights:", class_weights)
-
-# IMG_HEIGHT = X_train.shape[1]
-# IMG_WIDTH  = X_train.shape[2]
-# IMG_CHANNELS = X_train.shape[3]
-
-# def get_model():
-#     return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
-
-# model = get_model()
-
-# history = model.fit(X_train, y_train_cat, 
-#                     batch_size = 16, 
-#                     verbose=1, 
-#                     epochs=2, 
-#                     validation_data=(X_test, y_test_cat), 
-#                     class_weight=class_weights,
-#                     shuffle=False)
-                    
-# model.save('multi_unet_with_class_weights.h5')
-
-# ##############################################################################################
-
-# #Evaluate the model
-# plt.figure(figsize=(15,5))
-# plt.subplot(1,2,1)
-# plt.plot(history.history['loss'], color='r')
-# plt.plot(history.history['val_loss'])
-# plt.ylabel('Losses')
-# plt.xlabel('Epoch')
-# plt.legend(['Train', 'Val.'], loc='upper right')
-# plt.subplot(1,2,2)
-# plt.plot(history.history['dice_coef'], color='r')
-# plt.plot(history.history['val_dice_coef'])
-# plt.ylabel('dice_coef')
-# plt.xlabel('Epoch')
-# plt.tight_layout()
-# plt.savefig(f'multikunet/process_with_class_weights.png')
-# plt.close()
-
-# max_dice_coef = max(history.history['dice_coef'])
-# max_val_dice_coef = max(history.history['val_dice_coef'])
-
-# f = open("multikunet/output_with_class_weights.txt", "a")
-# print("Max Dice Score: ", max_dice_coef, file=f)
-# print("Max Val Dice Score: ", max_val_dice_coef, file=f)
-# f.close()
-    
-# model.load_weights(f'multikunet/multi_unet_with_class_weights.h5')
-
-# dice_scores = []
-
-# for z in range(len(X_test)):
-#     test_img_number = random.randint(0, len(X_test))
-#     test_img = X_test[test_img_number]
-#     ground_truth = y_test[test_img_number]
-#     test_img_norm = test_img[:,:,0][:,:,None]
-#     test_img_input = np.expand_dims(test_img_norm, 0)
-#     prediction = (model.predict(test_img_input))
-#     predicted_img = np.argmax(prediction, axis=3)[0,:,:]
-
-#     dice_scores.append(dice_coef(ground_truth, predicted_img))
-
-#     # original_image_normalized = ground_truth.astype(float) / np.max(ground_truth)
-#     # colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
-#     # alpha = 0.5 
-#     # colored_mask[..., 3] = np.where(prediction > 0, alpha, 0)
-
-#     plt.figure(figsize=(16, 8))
-#     plt.subplot(131)
-#     plt.title('Testing Image')
-#     plt.imshow(test_img[:,:,0], cmap='gray')
-#     plt.subplot(132)
-#     plt.title('Testing Label')
-#     plt.imshow(ground_truth[:,:,0], cmap='jet')
-#     plt.subplot(133)
-#     plt.title('Prediction on test image')
-#     plt.imshow(predicted_img, cmap='jet')
-#     # plt.subplot(144)
-#     # plt.title("Overlayed Images")
-#     # plt.imshow(original_image_normalized, cmap='jet')
-#     # plt.imshow(colored_mask, cmap='jet')
-#     plt.savefig(f'multikunet/predict_with_class_weights/prediction_{z}.png')
-#     plt.close()
-
-# f = open("multikunet/output_with_class_weights.txt", "a")
-# print("Average Prediction Dice Score: ", np.mean(dice_scores), file=f)
-# f.close()
-
-# ##############################################################################################
