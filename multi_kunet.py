@@ -205,14 +205,14 @@ y_test_cat = to_categorical(y_test, num_classes=n_classes)
 
 ##############################################################################################
 
-def manual_class_weight_dict(labels):
+def manual_class_weights(labels):
     class_count = Counter(labels)
     total = sum(class_count.values())
     classes = sorted(class_count.keys())
     class_weights = {cls: total / (len(class_count) * class_count[cls]) for cls in classes}
     return class_weights
 
-class_weights = manual_class_weight_dict(sliced_masks_encoded_original_shape)
+class_weights = manual_class_weights(sliced_masks_encoded_original_shape)
 print("Class weights:", class_weights)
 
 focal_loss = multi_class_focal_loss(gamma=2, alpha=class_weights)
