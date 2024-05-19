@@ -166,11 +166,19 @@ sliced_mask_dataset = []
 image_names = []
 sliced_image_names = []
 
+def pad_volume(volume, desired_size=(256, 256, 40)):
+    # Calculate the padding needed to reach the desired size
+    pad_width = [(max(0, (s - volume.shape[i]) // 2), max(0, (s - volume.shape[i] + 1) // 2)) for i, s in enumerate(desired_size)]
+    # Pad the volume
+    padded_volume = np.pad(volume, pad_width, mode='constant', constant_values=0)
+    return padded_volume
+
 images = os.listdir(image_directory)
 for i, image_name in enumerate(images):    
     if (image_name.split('.')[1] == 'nii'):
         image = nib.load(image_directory+image_name)
         image = np.array(image.get_fdata())
+        image = pad_volume(image, (256, 256, 40))
         image_dataset.append(np.array(image))
         image_names.append(image_name.split('.')[0])
 
@@ -179,6 +187,7 @@ for i, image_name in enumerate(masks):
     if (image_name.split('.')[1] == 'nii'):
         image = nib.load(mask_directory+image_name)
         image = np.array(image.get_fdata())
+        image = pad_volume(image, (256, 256, 40))
         mask_dataset.append(np.array(image))
 
 # peds_images = os.listdir(peds_image_directory)
