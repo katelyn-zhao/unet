@@ -1,0 +1,24 @@
+FOLD------------------------------------------
+Max Dice Score:  0.8495612144470215
+Max Val Dice Score:  0.8093712329864502
+Max TPR:  0.8684281706809998
+Max FPR:  0.00278824963606894
+Average Prediction Dice Score:  0.8137647210891105
+Average Prediction TPR:  0.27747444218892947
+Average Prediction FPR:  0.00418030710888213
+FOLD------------------------------------------
+Max Dice Score:  0.8495617508888245
+Max Val Dice Score:  0.8057292103767395
+Max TPR:  0.8665853142738342
+Max FPR:  0.002657887525856495
+Average Prediction Dice Score:  0.6847228219298397
+Average Prediction TPR:  0.3413904316265514
+Average Prediction FPR:  0.009600061517097828
+FOLD------------------------------------------
+Max Dice Score:  0.8469485640525818
+Max Val Dice Score:  0.8037625551223755
+Max TPR:  0.8660367131233215
+Max FPR:  0.0028029163368046284
+Average Prediction Dice Score:  0.6407763259572629
+Average Prediction TPR:  0.27562104894981493
+Average Prediction FPR:  0.012956011564456445
