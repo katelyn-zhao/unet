@@ -22,10 +22,13 @@ from sklearn.model_selection import train_test_split
 from keras.callbacks import Callback
 from sklearn.model_selection import KFold
 from keras.models import Model
+from collections import Counter
 from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Conv2DTranspose, BatchNormalization, Dropout, Lambda
 from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
+from tensorflow.keras import backend as K
+from tensorflow.keras.losses import Loss
 
 
 def dice_coef(y_true, y_pred):
@@ -127,6 +130,42 @@ def fpr_p(y_true, y_pred, threshold=0.5):
     mean_fpr = total_fpr / num_class
     return mean_fpr
 
+# def multi_class_focal_loss(gamma, alpha):
+#     alpha = tf.constant(alpha, dtype=tf.float32)
+#     def focal_loss_fixed(y_true, y_pred):
+#         epsilon = tf.keras.backend.epsilon()
+#         y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
+#         # Cross-entropy part
+#         cross_entropy = -y_true * tf.math.log(y_pred)
+#         pt = y_true * y_pred + (1-y_true) * (1-y_pred)
+#         modulating_factor = tf.pow(1.0-pt, gamma)
+#         alpha_weighted = alpha * y_true
+#         # Focal loss part
+#         loss = alpha_weighted * modulating_factor * cross_entropy
+#         return tf.reduce_mean(tf.reduce_sum(loss, axis=1))
+#     return focal_loss_fixed
+
+class FocalLoss(Loss):
+    def __init__(self, class_weights, gamma=0.2, name='focal_loss'):
+        super().__init__(name=name):
+        self.gamma = gamma
+        self.class_weights = class_weights
+
+    def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, tf.int32)
+        y_true = tf.one_hot(y_true, depth=len(self.class_weights))
+
+        y_pred = tf.nn.softmax(y_pred, axis=-1)
+
+        epsilon = K.epsilon()
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1.-epsilon)
+
+        cross_entropy = -y_true * tf.math.log(y_pred)
+
+        loss = self.alpha * tf.pow(1-y_pred, self.gamma) * cross_entropy
+        loss = tf.reduce_sum(loss, axis=-1)
+        return tf.reduce_mean(loss)
+
 ##############################################################################################
 
 def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1):
@@ -188,7 +227,7 @@ def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1
     outputs = Conv2D(n_classes, (1, 1), activation='softmax')(c9)
      
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=[dice_coef, tpr, fpr])
+    model.compile(optimizer='adam', loss=focal_loss, metrics=[dice_coef, tpr, fpr])
     model.summary()
     
     return model
@@ -209,12 +248,20 @@ sliced_mask_dataset = []
 image_names = []
 sliced_image_names = []
 
+def pad_volume(volume):
+    pad_x = max(0, 256 - volume.shape[0])
+    pad_y = max(0, 256 - volume.shape[1])
+    # pad_z = max(0, 40 - volume.shape[2])
+    pad_width = ((0, pad_x), (0, pad_y), (0, volume.shape[2]))
+    volume_padded = np.pad(volume, pad_width, mode='constant', constant_values=0.0)
+    return volume_padded
 
 images = sorted(os.listdir(image_directory))
 for i, image_name in enumerate(images):    
     if (image_name.split('.')[1] == 'nii'):
         image = nib.load(image_directory+image_name)
         image = np.array(image.get_fdata())
+        image = pad_volume(image)
         image_dataset.append(np.array(image))
         image_names.append(image_name.split('.')[0])
 
@@ -223,6 +270,7 @@ for i, image_name in enumerate(masks):
     if (image_name.split('.')[1] == 'nii'):
         image = nib.load(mask_directory+image_name)
         image = np.array(image.get_fdata())
+        image = pad_volume(image)
         mask_dataset.append(np.array(image))
 
 for i in range(len(image_dataset)):
@@ -230,7 +278,32 @@ for i in range(len(image_dataset)):
         sliced_image_dataset.append(image_dataset[i][:,:,j])
         sliced_mask_dataset.append(mask_dataset[i][:,:,j])
         sliced_image_names.append(image_names[i] + '-' + str(j))
-    
+        #rotation
+        cw = random.randint(0,1)
+        angle = random.randint(5,10)
+        #contrast adjustment
+        adjust = random.randint(0,1)
+        contrast = random.randint(1,2)
+        #reflection
+        reflect = random.randint(0,2)
+        #applying changes
+        if adjust and cw == 1:
+            sliced_image_dataset.append(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False, order=1))
+            sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle, reshape = False, order=0))
+            sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+        if adjust and cw == 0:
+            sliced_image_dataset.append(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle * -1, reshape = False, order=1))
+            sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False, order=0))
+            sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+        # if adjust and cw == 1 and reflect == 0:
+        #     sliced_image_dataset.append(cv2.flip(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False, order=1), 1))
+        #     sliced_mask_dataset.append(cv2.flip(rotate(mask_dataset[i][:,:,j], angle, reshape = False, order=0), 1))
+        #     sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+        # if adjust and cw == 0 and reflect == 0:
+        #     sliced_image_dataset.append(cv2.flip(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle * -1, reshape = False, order=1), 1))
+        #     sliced_mask_dataset.append(cv2.flip(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False, order=0), 1))
+        #     sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+
 
 sliced_image_dataset = np.array(sliced_image_dataset)
 sliced_mask_dataset = np.array(sliced_mask_dataset)
@@ -260,6 +333,26 @@ sliced_image_dataset = normalize(sliced_image_dataset, axis=1)
 
 sliced_mask_dataset = np.expand_dims(sliced_masks_encoded_original_shape, axis=3)
 
+f = open(f"C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt", "a")
+print("sliced image dataset: ", len(sliced_image_dataset), file=f)
+f.close()
+
+def manual_class_weight(labels):
+    class_count = Counter(labels)
+    total = sum(class_count.values())
+    classes = sorted(class_count.keys())
+    class_weights = [total / (len(class_count) * class_count[cls]) for cls in classes]
+    return class_weights
+
+class_weights = manual_class_weight(sliced_masks_reshaped_encoded)
+class_weights /= np.sum(class_weights)
+
+focal_loss = FocalLoss(class_weights=class_weights, gamma=0.2)
+
+f = open(f"C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt", "a")
+print("Class weights:", class_weights, file=f)
+f.close()
+
 ##############################################################################################
 
 def get_model():
@@ -286,7 +379,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
 
         model = get_model()
 
-        checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/multikunet/multi_kunet{i}.h5', monitor='val_loss', save_best_only=True)
+        checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_bestmodel{i}.h5', monitor='val_loss', save_best_only=True)
 
         history = model.fit(X_train, y_train_cat, 
                             batch_size=16, 
@@ -310,52 +403,44 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         plt.ylabel('dice_coef')
         plt.xlabel('Epoch')
         plt.tight_layout()
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet_process{i}.png')
+        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_process{i}.png')
         plt.close()
 
         max_dice_coef = max(history.history['dice_coef'])
         max_val_dice_coef = max(history.history['val_dice_coef'])
         max_tpr = max(history.history['tpr'])
-        max_val_tpr = max(history.history['val_tpr'])
-        min_tpr = max(history.history['fpr'])
-        min__val_tpr = min(history.history['val_fpr'])
+        min_fpr = min(history.history['fpr'])
 
-        f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/output.txt', "a")
+        f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt', "a")
         print("FOLD------------------------------------------", file=f)
         print("Max Dice Score: ", max_dice_coef, file=f)
         print("Max Val Dice Score: ", max_val_dice_coef, file=f)
         print("Max TPR: ", max_tpr, file=f)
-        print("Max Val TPR: ". max_val_tpr, file=f)
-        print("Max FPR: ", max_fpr, file=f)
-        print("Max Val FPR: ". max_val_fpr, file=f)
+        print("Max FPR: ", min_fpr, file=f)
         f.close()
             
-        model.load_weights(f'C:/Users/Mittal/Desktop/kunet/multikunet/multi_kunet{i}.h5')
+        model.load_weights(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_bestmodel{i}.h5')
 
         dice_scores = []
+        tprs = []
+        fprs = []
 
         for z in range(25):
             test_img_number = random.randint(0, len(X_test)-1)
             test_img = X_test[test_img_number]
             ground_truth = y_test[test_img_number]
+            ground_truth_cat = y_test_cat[test_img_number]
             test_img_norm = test_img[:,:,0][:,:,None]
             test_img_input = np.expand_dims(test_img_norm, 0)
             prediction = (model.predict(test_img_input))
             predicted_img = np.argmax(prediction, axis=3)[0,:,:]
 
-            # shape = prediction.shape
-            # prediction_dice = prediction
-
-            # for row in range(shape[0]): 
-            #     for col in range(shape[1]):
-            #         if (prediction[0, row, col, 0] <= 0.5):
-            #             prediction_dice[row, col] == 0
-
-            # prediction_dice = prediction_dice.astype(np.float32)
-            # ground_truth_dice = ground_truth.astype(np.float32)
-
-            # dice_score = dice_coef(ground_truth_dice, prediction_dice)
-            # dice_scores.append(dice_score)
+            dice_score = dice_coef_p(ground_truth_cat, prediction)
+            pred_tpr = tpr_p(ground_truth_cat, prediction)
+            pred_fpr = fpr_p(ground_truth_cat, prediction)
+            dice_scores.append(dice_score)
+            tprs.append(pred_tpr)
+            fprs.append(pred_fpr)
 
             # original_image_normalized = ground_truth.astype(float) / np.max(ground_truth)
             # colored_mask = plt.get_cmap('jet')(prediction / np.max(prediction))
@@ -376,11 +461,13 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
             # plt.title("Overlayed Images")
             # plt.imshow(original_image_normalized, cmap='jet')
             # plt.imshow(colored_mask, cmap='jet')
-            plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/predict/fold{i}_{z}.png')
+            plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/predict/fold{i}_{name_test[test_img_number]}.png')
             plt.close()
 
-        f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/output.txt', "a")
+        f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt', "a")
         print("Average Prediction Dice Score: ", np.mean(dice_scores), file=f)
+        print("Average Prediction TPR: ", np.mean(tprs), file=f)
+        print("Average Prediction FPR: ", np.mean(fprs), file=f)
         f.close()
 
 ##############################################################################################
