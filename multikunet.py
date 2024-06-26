@@ -130,41 +130,11 @@ def fpr_p(y_true, y_pred, threshold=0.5):
     mean_fpr = total_fpr / num_class
     return mean_fpr
 
-# def multi_class_focal_loss(gamma, alpha):
-#     alpha = tf.constant(alpha, dtype=tf.float32)
-#     def focal_loss_fixed(y_true, y_pred):
-#         epsilon = tf.keras.backend.epsilon()
-#         y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
-#         # Cross-entropy part
-#         cross_entropy = -y_true * tf.math.log(y_pred)
-#         pt = y_true * y_pred + (1-y_true) * (1-y_pred)
-#         modulating_factor = tf.pow(1.0-pt, gamma)
-#         alpha_weighted = alpha * y_true
-#         # Focal loss part
-#         loss = alpha_weighted * modulating_factor * cross_entropy
-#         return tf.reduce_mean(tf.reduce_sum(loss, axis=1))
-#     return focal_loss_fixed
-
-class FocalLoss(Loss):
-    def __init__(self, class_weights, gamma=0.2, name='focal_loss'):
-        super().__init__(name=name):
-        self.gamma = gamma
-        self.class_weights = class_weights
-
-    def call(self, y_true, y_pred):
-        y_true = tf.cast(y_true, tf.int32)
-        y_true = tf.one_hot(y_true, depth=len(self.class_weights))
-
-        y_pred = tf.nn.softmax(y_pred, axis=-1)
-
-        epsilon = K.epsilon()
-        y_pred = tf.clip_by_value(y_pred, epsilon, 1.-epsilon)
-
-        cross_entropy = -y_true * tf.math.log(y_pred)
-
-        loss = self.alpha * tf.pow(1-y_pred, self.gamma) * cross_entropy
-        loss = tf.reduce_sum(loss, axis=-1)
-        return tf.reduce_mean(loss)
+def dice_loss(y_true, y_pred, smooth=1):
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    return 
 
 ##############################################################################################
 
@@ -237,11 +207,10 @@ def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1
     outputs = Conv2D(n_classes, (1, 1), activation='softmax')(c11)
      
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=[dice_coef, tpr, fpr])
     model.summary()
     
     return model
-
 
 ##############################################################################################
 
@@ -249,10 +218,15 @@ def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1
 n_classes= 10
 
 #Capture training image info as a list
-image_directory = 'MRI19/multi_Anatomical_mag_echo5/'
-mask_directory = 'MRI19/multi_liver_segmentation/'
+image_directory = 'MRI_IMAGES/fatfrac_MRI/'
+liver_directory = 'MRI_IMAGES/MRI/whole_liver_segmentation/'
+mask_directory = 'MRI_IMAGES/multi_MRI/'
+peds_image_directory = 'MRI_IMAGES/fatfrac_PMRI/'
+peds_mask_directory = 'MRI_IMAGES/multi_PMRI/'
+peds_liver_directory = 'MRI_IMAGES/PMRI/whole_liver_segmentation/'
 
-image_dataset = []  
+image_dataset = []
+liver_dataset = []  
 mask_dataset = []
 sliced_image_dataset = []
 sliced_mask_dataset = []
@@ -262,19 +236,30 @@ sliced_image_names = []
 def pad_volume(volume):
     pad_x = max(0, 256 - volume.shape[0])
     pad_y = max(0, 256 - volume.shape[1])
-    # pad_z = max(0, 40 - volume.shape[2])
-    pad_width = ((0, pad_x), (0, pad_y), (0, volume.shape[2]))
+    pad_x_begin = pad_x // 2
+    pad_x_end = pad_x - pad_x_begin
+    pad_y_begin = pad_y // 2
+    pad_y_end = pad_y - pad_y_begin
+    pad_width = ((pad_x_begin, pad_x_end), (pad_y_begin, pad_y_end), (0, 0))
     volume_padded = np.pad(volume, pad_width, mode='constant', constant_values=0.0)
     return volume_padded
 
 images = sorted(os.listdir(image_directory))
 for i, image_name in enumerate(images):    
-    if (image_name.split('.')[1] == 'nii'):
+    if (image_name.split('.')[1] == 'nii' and image_name.split('.')[0] != 'f_4057' and image_name.split('.')[0] != 'f_5481'):
         image = nib.load(image_directory+image_name)
         image = np.array(image.get_fdata())
         image = pad_volume(image)
         image_dataset.append(np.array(image))
         image_names.append(image_name.split('.')[0])
+
+livers = sorted(os.listdir(liver_directory))
+for i, image_name in enumerate(livers):
+    if (image_name.split('.')[1] == 'nii' and image_name.split('.')[0] != 'f_4057' and image_name.split('.')[0] != 'f_5481'):
+        image = nib.load(liver_directory+image_name)
+        image = np.array(image.get_fdata())
+        image = pad_volume(image)
+        liver_dataset.append(np.array(image))
 
 masks = sorted(os.listdir(mask_directory))
 for i, image_name in enumerate(masks):
@@ -284,36 +269,84 @@ for i, image_name in enumerate(masks):
         image = pad_volume(image)
         mask_dataset.append(np.array(image))
 
+peds_images = sorted(os.listdir(peds_image_directory))
+for i, image_name in enumerate(peds_images):    
+    if (image_name.split('.')[1] == 'nii' and image_name.split('.')[0] != 'c_3309'):
+        image = nib.load(peds_image_directory+image_name)
+        image = np.array(image.get_fdata())
+        image = pad_volume(image)
+        image_dataset.append(np.array(image))
+        image_names.append(image_name.split('.')[0])
+
+peds_livers = sorted(os.listdir(peds_liver_directory))
+for i, image_name in enumerate(peds_livers):
+    if (image_name.split('.')[1] == 'nii' and image_name.split('.')[0] != 'c_3310'):
+        image = nib.load(peds_liver_directory+image_name)
+        image = np.array(image.get_fdata())
+        image = pad_volume(image)
+        liver_dataset.append(np.array(image))
+
+peds_masks = sorted(os.listdir(peds_mask_directory))
+for i, image_name in enumerate(peds_masks):
+    if (image_name.split('.')[1] == 'nii'):
+        image = nib.load(peds_mask_directory+image_name)
+        image = np.array(image.get_fdata())
+        image = pad_volume(image)
+        mask_dataset.append(np.array(image))
+
 for i in range(len(image_dataset)):
-    for j in range(image_dataset[i].shape[2]):
-        sliced_image_dataset.append(image_dataset[i][:,:,j])
-        sliced_mask_dataset.append(mask_dataset[i][:,:,j])
-        sliced_image_names.append(image_names[i] + '-' + str(j))
-        #rotation
-        cw = random.randint(0,1)
-        angle = random.randint(5,10)
-        #contrast adjustment
-        adjust = random.randint(0,1)
-        contrast = random.randint(1,2)
-        #reflection
-        reflect = random.randint(0,2)
-        #applying changes
-        if adjust and cw == 1:
-            sliced_image_dataset.append(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False, order=1))
-            sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle, reshape = False, order=0))
-            sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
-        if adjust and cw == 0:
-            sliced_image_dataset.append(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle * -1, reshape = False, order=1))
-            sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False, order=0))
-            sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
-        # if adjust and cw == 1 and reflect == 0:
-        #     sliced_image_dataset.append(cv2.flip(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False, order=1), 1))
-        #     sliced_mask_dataset.append(cv2.flip(rotate(mask_dataset[i][:,:,j], angle, reshape = False, order=0), 1))
-        #     sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
-        # if adjust and cw == 0 and reflect == 0:
-        #     sliced_image_dataset.append(cv2.flip(rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle * -1, reshape = False, order=1), 1))
-        #     sliced_mask_dataset.append(cv2.flip(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False, order=0), 1))
-        #     sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+    if mask_dataset[i].shape[2] < image_dataset[i].shape[2]:
+        for j in range(mask_dataset[i].shape[2]):
+            sliced_image_dataset.append(image_dataset[i][:,:,j] * liver_dataset[i][:,:,j])
+            sliced_mask_dataset.append(mask_dataset[i][:,:,j])
+            sliced_image_names.append(image_names[i] + '-' + str(j))
+            #rotation
+            cw = random.randint(0,1)
+            angle = random.randint(5,10)
+            #contrast adjustment
+            adjust = random.randint(0,1)
+            contrast = random.randint(1,2)
+            #reflection
+            reflect = random.randint(0,2)
+            #applying changes
+            if adjust and cw == 1:
+                augmented_image = rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False, order=1)
+                augmented_liver = rotate(liver_dataset[i][:,:,j], angle, reshape = False, order=0)
+                sliced_image_dataset.append(augmented_image * augmented_liver)
+                sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle, reshape = False, order=0))
+                sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+            if adjust and cw == 0:
+                augmented_image = rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle * -1, reshape = False, order=1)
+                augmented_liver = rotate(liver_dataset[i][:,:,j], angle * -1, reshape = False, order=0)
+                sliced_image_dataset.append(augmented_image * augmented_liver)
+                sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False, order=0))
+                sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+    else:
+        for j in range(image_dataset[i].shape[2]):
+            sliced_image_dataset.append(image_dataset[i][:,:,j] * liver_dataset[i][:,:,j])
+            sliced_mask_dataset.append(mask_dataset[i][:,:,j])
+            sliced_image_names.append(image_names[i] + '-' + str(j))
+            #rotation
+            cw = random.randint(0,1)
+            angle = random.randint(5,10)
+            #contrast adjustment
+            adjust = random.randint(0,1)
+            contrast = random.randint(1,2)
+            #reflection
+            reflect = random.randint(0,2)
+            #applying changes
+            if adjust and cw == 1:
+                augmented_image = rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle, reshape = False, order=1)
+                augmented_liver = rotate(liver_dataset[i][:,:,j], angle, reshape = False, order=0)
+                sliced_image_dataset.append(augmented_image * augmented_liver)
+                sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle, reshape = False, order=0))
+                sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
+            if adjust and cw == 0:
+                augmented_image = rotate(cv2.convertScaleAbs(image_dataset[i][:,:,j], alpha = contrast, beta = 0), angle * -1, reshape = False, order=1)
+                augmented_liver = rotate(liver_dataset[i][:,:,j], angle * -1, reshape = False, order=0)
+                sliced_image_dataset.append(augmented_image * augmented_liver)
+                sliced_mask_dataset.append(rotate(mask_dataset[i][:,:,j], angle * -1, reshape = False, order=0))
+                sliced_image_names.append(image_names[i] + '-' + str(j) + '-aug')
 
 
 sliced_image_dataset = np.array(sliced_image_dataset)
@@ -344,7 +377,7 @@ sliced_image_dataset = normalize(sliced_image_dataset, axis=1)
 
 sliced_mask_dataset = np.expand_dims(sliced_masks_encoded_original_shape, axis=3)
 
-f = open(f"C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt", "a")
+f = open(f"C:/Users/Mittal/Desktop/kunet/model2_output.txt", "a")
 print("sliced image dataset: ", len(sliced_image_dataset), file=f)
 f.close()
 
@@ -358,9 +391,7 @@ def manual_class_weight(labels):
 class_weights = manual_class_weight(sliced_masks_reshaped_encoded)
 class_weights /= np.sum(class_weights)
 
-focal_loss = FocalLoss(class_weights=class_weights, gamma=0.2)
-
-f = open(f"C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt", "a")
+f = open(f"C:/Users/Mittal/Desktop/kunet/model2_output.txt", "a")
 print("Class weights:", class_weights, file=f)
 f.close()
 
@@ -390,12 +421,12 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
 
         model = get_model()
 
-        checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_bestmodel{i}.h5', monitor='val_loss', save_best_only=True)
+        checkpoint = ModelCheckpoint(f'C:/Users/Mittal/Desktop/kunet/model2_{i}.h5', monitor='val_loss', save_best_only=True)
 
         history = model.fit(X_train, y_train_cat, 
-                            batch_size=16, 
+                            batch_size=32, 
                             verbose=1, 
-                            epochs=800, 
+                            epochs=1000, 
                             validation_data=(X_test, y_test_cat), 
                             shuffle=False,
                             callbacks=[checkpoint])
@@ -414,7 +445,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         plt.ylabel('dice_coef')
         plt.xlabel('Epoch')
         plt.tight_layout()
-        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_process{i}.png')
+        plt.savefig(f'C:/Users/Mittal/Desktop/kunet/model2_process{i}.png')
         plt.close()
 
         max_dice_coef = max(history.history['dice_coef'])
@@ -422,7 +453,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         max_tpr = max(history.history['tpr'])
         min_fpr = min(history.history['fpr'])
 
-        f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt', "a")
+        f = open(f'C:/Users/Mittal/Desktop/kunet/model2_output.txt', "a")
         print("FOLD------------------------------------------", file=f)
         print("Max Dice Score: ", max_dice_coef, file=f)
         print("Max Val Dice Score: ", max_val_dice_coef, file=f)
@@ -430,7 +461,7 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
         print("Max FPR: ", min_fpr, file=f)
         f.close()
             
-        model.load_weights(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_bestmodel{i}.h5')
+        model.load_weights(f'C:/Users/Mittal/Desktop/kunet/model2_{i}.h5')
 
         dice_scores = []
         tprs = []
@@ -472,10 +503,10 @@ for i, (train_index, test_index) in enumerate(kf.split(sliced_image_dataset, sli
             # plt.title("Overlayed Images")
             # plt.imshow(original_image_normalized, cmap='jet')
             # plt.imshow(colored_mask, cmap='jet')
-            plt.savefig(f'C:/Users/Mittal/Desktop/kunet/multikunet/predict/fold{i}_{name_test[test_img_number]}.png')
+            plt.savefig(f'C:/Users/Mittal/Desktop/kunet/model2/model2predict3/fold{i}_{name_test[test_img_number]}.png')
             plt.close()
 
-        f = open(f'C:/Users/Mittal/Desktop/kunet/multikunet/multikunet2_output.txt', "a")
+        f = open(f'C:/Users/Mittal/Desktop/kunet/model2_output.txt', "a")
         print("Average Prediction Dice Score: ", np.mean(dice_scores), file=f)
         print("Average Prediction TPR: ", np.mean(tprs), file=f)
         print("Average Prediction FPR: ", np.mean(fprs), file=f)
