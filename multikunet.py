@@ -205,7 +205,7 @@ def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1
      
     outputs = Conv2D(n_classes, (1, 1), activation='softmax')(c11)
 
-    adam_optimizer = tensorflow.keras.optimizers.Adam(learning_rate=0.0001)
+    adam_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)
     
     model = Model(inputs=[inputs], outputs=[outputs])
     model.compile(optimizer=adam_optimizer, loss=combined_loss, metrics=[dice_coef, tpr, fpr])
