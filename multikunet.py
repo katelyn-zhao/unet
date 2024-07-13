@@ -130,11 +130,10 @@ def fpr_p(y_true, y_pred, threshold=0.5):
     mean_fpr = total_fpr / num_class
     return mean_fpr
 
-def dice_loss(y_true, y_pred, smooth=1):
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return 
+def combined_loss(y_true, y_pred):
+    cce_loss = tf.keras.losses.CategoricalCrossentropy()(y_true, y_pred)
+    d_loss = 1 - dice_coef(y_true, y_pred)
+    return cce_loss + d_loss
 
 ##############################################################################################
 
@@ -205,9 +204,11 @@ def multi_unet_model(n_classes=10, IMG_HEIGHT=256, IMG_WIDTH=256, IMG_CHANNELS=1
     c11 = Conv2D(64, (3, 3), activation='relu', kernel_initializer='he_normal', padding='same')(c11)
      
     outputs = Conv2D(n_classes, (1, 1), activation='softmax')(c11)
-     
+
+    adam_optimizer = tensorflow.keras.optimizers.Adam(learning_rate=0.0001)
+    
     model = Model(inputs=[inputs], outputs=[outputs])
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=[dice_coef, tpr, fpr])
+    model.compile(optimizer=adam_optimizer, loss=combined_loss, metrics=[dice_coef, tpr, fpr])
     model.summary()
     
     return model
