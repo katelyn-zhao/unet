@@ -166,7 +166,7 @@ def decoder(inputs, concat_input, filters, transpose_size):
     up = tf.keras.layers.Conv2D(filters, (3, 3), activation='relu', padding='same')(up)
     return up
 
-def build_unet_model(img_size=(512, 512, 3)):  
+def build_unet_model(img_size=(256, 256, 3)):  
     inputs = tf.keras.Input(img_size)
 
     # Encoder
